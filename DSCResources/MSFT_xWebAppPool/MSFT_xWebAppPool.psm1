@@ -98,7 +98,7 @@ function Get-TargetResource
 {
     <#
     .SYNOPSIS
-        This will return a hashtable of results 
+        This will return a hashtable of results
     #>
 
     [CmdletBinding()]
@@ -112,9 +112,15 @@ function Get-TargetResource
 
     Assert-Module
 
+    #Replace the Get-WebConfiguration with the .NET reference for performance
     # XPath -Filter is case-sensitive. Use Where-Object to get the target application pool by name.
-    $appPool = Get-WebConfiguration -Filter '/system.applicationHost/applicationPools/add' |
-        Where-Object -FilterScript {$_.name -eq $Name}
+    #$appPool = Get-WebConfiguration -Filter '/system.applicationHost/applicationPools/add' |
+    #    Where-Object -FilterScript {$_.name -eq $Name}
+
+    [System.Reflection.Assembly]::LoadWithPartialName("Microsoft.Web.Administration")
+    $computerName = $env:COMPUTERNAME
+    $IIS = [Microsoft.Web.Administration.ServerManager]::OpenRemote($computerName.ToLower())
+    $appPool = $IIS.ApplicationPools | Where-Object -FilterScript {$_.name -eq $Name}
 
     $cimCredential = $null
 
@@ -174,7 +180,7 @@ function Set-TargetResource
     .SYNOPSIS
         This will set the desired state
     #>
-    
+
     [CmdletBinding(SupportsShouldProcess = $true)]
     param
     (
@@ -236,7 +242,7 @@ function Set-TargetResource
         [String] $identityType,
 
         [System.Management.Automation.PSCredential]
-        [System.Management.Automation.Credential()] 
+        [System.Management.Automation.Credential()]
         $Credential,
 
         [ValidateScript({
@@ -339,10 +345,16 @@ function Set-TargetResource
 
     Assert-Module
 
-    $appPool = Get-WebConfiguration -Filter '/system.applicationHost/applicationPools/add' |
-        Where-Object -FilterScript {$_.name -eq $Name}
+    # Replace the Get-WebConfiguration commandlet with the .NET Reference for performance
+    #$appPool = Get-WebConfiguration -Filter '/system.applicationHost/applicationPools/add' |
+    #    Where-Object -FilterScript {$_.name -eq $Name}
 
-    if ($Ensure -eq 'Present')
+    [System.Reflection.Assembly]::LoadWithPartialName("Microsoft.Web.Administration")
+    $computerName = $env:COMPUTERNAME
+    $IIS = [Microsoft.Web.Administration.ServerManager]::OpenRemote($computerName.ToLower())
+    $appPool = $IIS.ApplicationPools | Where-Object -FilterScript {$_.name -eq $Name}
+
+        if ($Ensure -eq 'Present')
     {
         # Create Application Pool
         if ($null -eq $appPool)
@@ -369,7 +381,7 @@ function Set-TargetResource
                     $propertyPath = $_.Path
                     $property = Get-Property -Object $appPool -PropertyName $propertyPath
 
-                    if ( 
+                    if (
                         $PSBoundParameters[$propertyName] -ne $property
                     )
                     {
@@ -705,8 +717,15 @@ function Test-TargetResource
 
     $inDesiredState = $true
 
-    $appPool = Get-WebConfiguration -Filter '/system.applicationHost/applicationPools/add' |
-        Where-Object -FilterScript {$_.name -eq $Name}
+    #Replace the Get-WebConfiguration commandlet with the .NET reference for performance
+    #$appPool = Get-WebConfiguration -Filter '/system.applicationHost/applicationPools/add' |
+    #    Where-Object -FilterScript {$_.name -eq $Name}
+
+    [System.Reflection.Assembly]::LoadWithPartialName("Microsoft.Web.Administration")
+    $computerName = $env:COMPUTERNAME
+    $IIS = [Microsoft.Web.Administration.ServerManager]::OpenRemote($computerName.ToLower())
+    $appPool = $IIS.ApplicationPools | Where-Object -FilterScript {$_.name -eq $Name}
+
 
     if (
         ($Ensure -eq 'Absent' -and $null -ne $appPool) -or
@@ -858,9 +877,9 @@ function Test-TargetResource
 
 #region Helper Functions
 
-function Get-Property 
+function Get-Property
 {
-    param 
+    param
     (
         [object] $Object,
         [string] $PropertyName)
@@ -883,14 +902,14 @@ function Get-Property
     {
         return $value
     }
-} 
+}
 
 <#
     .SYNOPSIS
         Runs appcmd.exe - if there's an error then the application will terminate
-        
+
     .PARAMETER ArgumentList
-        Optional list of string arguments to be passed into appcmd.exe    
+        Optional list of string arguments to be passed into appcmd.exe
 
 #>
 function Invoke-AppCmd
@@ -901,14 +920,14 @@ function Invoke-AppCmd
         [String[]] $ArgumentList
     )
 
-    <# 
+    <#
             This is a local preference for the function which will terminate
             the program if there's an error invoking appcmd.exe
     #>
     $ErrorActionPreference = 'Stop'
 
     $appcmdFilePath = "$env:SystemRoot\System32\inetsrv\appcmd.exe"
-    
+
     $appcmdResult = $(& $appcmdFilePath $ArgumentList)
     Write-Verbose -Message $($appcmdResult).ToString()
 
